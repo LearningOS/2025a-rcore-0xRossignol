@@ -15,6 +15,7 @@ mod switch;
 mod task;
 
 use crate::loader::{get_app_data, get_num_app};
+use crate::mm::{MapPermission, PageTableEntry, VirtAddr, VirtPageNum};
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::vec::Vec;
@@ -153,6 +154,52 @@ impl TaskManager {
             panic!("All applications completed!");
         }
     }
+
+    /// every time a syscall is called, add the time it has been used
+    pub fn incr_task_times(&self, id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current_task_id = inner.current_task;
+        let current_task_tcb = &mut inner.tasks[current_task_id];
+        current_task_tcb.syscall_times[id] += 1;
+    }
+
+    /// returns the times that a syscall was called
+    /// useed in the syscall sys_trace
+    pub fn trace_syscalls(&self, id: usize) -> isize{
+        let inner = self.inner.exclusive_access();
+        let current_task_tcb = &inner.tasks[inner.current_task];
+        current_task_tcb.syscall_times[id] as isize
+    }
+}
+
+/// get current task page table
+pub fn get_current_task_page_table(vpn: VirtPageNum) -> Option<PageTableEntry> {
+        let inner = TASK_MANAGER.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].memory_set.translate(vpn)
+}
+
+/// create new map area
+pub fn create_new_map_area(start_va: VirtAddr, end_va: VirtAddr, perm: MapPermission) {
+    let mut inner = TASK_MANAGER.inner.exclusive_access();
+    let current = inner.current_task;
+    inner.tasks[current].memory_set.insert_framed_area(start_va, end_va, perm);
+}
+
+/// unmap consecutive area
+pub fn unmap_consecutive_area(start: usize, len:usize) -> isize {
+    let mut inner = TASK_MANAGER.inner.exclusive_access();
+    let current = inner.current_task;
+    let task = &mut inner.tasks[current];
+    let memory_set = &mut task.memory_set;
+
+    let start_va = VirtAddr::from(start);
+    let end_va = VirtAddr::from(start + len);
+
+    if memory_set.remove_vma_range(start_va, end_va).is_err() {
+        return -1;
+    }
+    0
 }
 
 /// Run the first task in task list.
