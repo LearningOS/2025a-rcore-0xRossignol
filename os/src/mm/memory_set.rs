@@ -318,6 +318,32 @@ impl MemorySet {
             false
         }
     }
+
+    /// remove vma range
+    pub fn remove_vma_range(&mut self, start_va: VirtAddr, end_va: VirtAddr) -> Result<(),()> {
+        if let Some(index) = self.areas.iter().position(|area| {
+            area.vpn_range.get_start() == start_va.floor() &&
+            area.vpn_range.get_end() == end_va.ceil()
+        }) {
+            let mut removed_area = self.areas.remove(index);
+
+            removed_area.unmap(&mut self.page_table);
+
+            Ok(())
+        } else {
+            let is_overlapping_partially = self.areas.iter().any(|area| {
+                let area_start_va: VirtAddr = area.vpn_range.get_start().into();
+                let area_end_va: VirtAddr = area.vpn_range.get_end().into();
+                area_start_va < end_va && area_end_va > start_va
+            });
+
+            if is_overlapping_partially {
+                return Err(());
+            }
+
+            Ok(())
+        }
+    }
 }
 /// map area structure, controls a contiguous piece of virtual memory
 pub struct MapArea {
@@ -363,7 +389,10 @@ impl MapArea {
                 self.data_frames.insert(vpn, frame);
             }
         }
-        let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
+        let temp_pte = self.map_perm.bits() | PTEFlags::V.bits();
+        let pte_flags = unsafe {
+            PTEFlags::from_bits_unchecked(temp_pte)
+        };
         page_table.map(vpn, ppn, pte_flags);
     }
     pub fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
