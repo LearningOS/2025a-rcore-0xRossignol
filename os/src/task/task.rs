@@ -66,6 +66,8 @@ pub struct TaskControlBlockInner {
 
     /// It is set when active exit or execution error occurs
     pub exit_code: i32,
+
+    /// fd_table
     pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
 
     /// Heap bottom
@@ -85,9 +87,12 @@ pub struct TaskControlBlockInner {
 }
 
 impl TaskControlBlockInner {
+    /// get_trap_cx
     pub fn get_trap_cx(&self) -> &'static mut TrapContext {
         self.trap_cx_ppn.get_mut()
     }
+
+    /// get_user_token
     pub fn get_user_token(&self) -> usize {
         self.memory_set.token()
     }
@@ -99,6 +104,8 @@ impl TaskControlBlockInner {
     pub fn is_zombie(&self) -> bool {
         self.get_status() == TaskStatus::Zombie
     }
+
+    /// alloc_fd
     pub fn alloc_fd(&mut self) -> usize {
         if let Some(fd) = (0..self.fd_table.len()).find(|fd| self.fd_table[*fd].is_none()) {
             fd

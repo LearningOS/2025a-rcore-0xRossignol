@@ -53,9 +53,22 @@ impl OSInode {
         }
         v
     }
+
+    /// get inode id
+    pub fn get_inode_id(&self) -> u64 {
+        let inner = self.inner.exclusive_access();
+        inner.inode.block_id as u64
+    }
+
+    /// get_inode_pos
+    pub fn get_inode_pos(&self) -> (usize, usize) {
+        let inner = self.inner.exclusive_access();
+        (inner.inode.block_id, inner.inode.block_offset)
+    }
 }
 
 lazy_static! {
+    /// ROOT_INODE
     pub static ref ROOT_INODE: Arc<Inode> = {
         let efs = EasyFileSystem::open(BLOCK_DEVICE.clone());
         Arc::new(EasyFileSystem::root_inode(&efs))
